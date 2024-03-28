@@ -102,7 +102,6 @@ class GreedyState:
     cur_len: jnp.ndarray
     sequences: jnp.ndarray
     logits: jnp.ndarray
-    logits_collected_len: jnp.ndarray
     running_token: jnp.ndarray
     is_sent_finished: jnp.ndarray
     model_kwargs: Dict[str, jnp.ndarray]
@@ -608,7 +607,6 @@ class FlaxGenerationMixin:
             cur_len=cur_len,
             sequences=sequences,
             logits=logits,
-            logits_collected_len=logits_collected_len,
             running_token=input_ids,
             is_sent_finished=is_sent_finished,
             model_kwargs=model_kwargs,
@@ -624,24 +622,35 @@ class FlaxGenerationMixin:
         def greedy_search_body_fn(state: GreedyState):
             """state update fn."""
             model_outputs = model(state.running_token, params=params, **state.model_kwargs)
+            logits = model_outputs.logits[:, -1]
+            
             
             state_logits = state.logits
             if state_logits.dtype != model_outputs.logits.dtype:
                 jax.debug.print("Casting state_logits to model_outputs.logits.dtype")
                 state_logits = state_logits.astype(model_outputs.logits.dtype)
-                
+            
+            def true_fn():
+                return lax.dynamic_update_slice(
+                    state_logits, model_outputs.logits, (0, 0, 0)
+                )
+            
+            def false_fn():
+                return lax.dynamic_update_slice(
+                    state_logits, logits, (0, state.cur_len, 0)
+                )
+            
+            state_logits = jax.lax.cond(
+                state.cur_len == 0,
+                true_fn,
+                false_fn
+            )
+            
             jax.debug.print("model_outputs: {}", model_outputs)
-            
-            state_logits_slice = model_outputs.logits[:, state.logits_collected_len : -1]
-            state_logits = lax.dynamic_update_slice(state_logits, state_logits_slice, (0, state.logits_collected_len, 0)) 
-            
-            jax.debug.print("state_logits: {}", state_logits.shape)
-            jax.debug.print("state_logits_slice: {}", state_logits_slice.shape)
-            jax.debug.print("logits_collected_len: {}", state.logits_collected_len)
+            jax.debug.print("state_logits: {}, shape: {}", state_logits, state_logits.shape)
             jax.debug.print("cur_len: {}", state.cur_len)
             
             
-            logits = model_outputs.logits[:, -1]
             # apply min_length, ...
             logits = logits_processor(state.sequences, logits, state.cur_len)
 
@@ -658,7 +667,6 @@ class FlaxGenerationMixin:
                 cur_len=state.cur_len + 1,
                 sequences=next_sequences,
                 logits=state_logits,
-                logits_collected_len=state.cur_len + 1,
                 running_token=next_token,
                 is_sent_finished=next_is_sent_finished,
                 model_kwargs=next_model_kwargs,
