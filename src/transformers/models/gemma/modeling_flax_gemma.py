@@ -537,6 +537,10 @@ class FlaxGemmaPreTrainedModel(FlaxPreTrainedModel):
             mutable=mutable,
         )
 
+        jax.debug.print(
+            "FlaxGemmaPreTrainedModel.__call__ : self.module.apply - {}", outputs
+        )
+
         # add updated cache to model output
         if past_key_values is not None and return_dict:
             outputs, past_key_values = outputs
