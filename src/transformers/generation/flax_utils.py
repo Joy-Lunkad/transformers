@@ -627,7 +627,6 @@ class FlaxGenerationMixin:
             
             state_logits = state.logits
             if state_logits.dtype != model_outputs.logits.dtype:
-                jax.debug.print("Casting state_logits to model_outputs.logits.dtype")
                 state_logits = state_logits.astype(model_outputs.logits.dtype)
             
             def true_fn() -> jnp.ndarray:
@@ -645,12 +644,7 @@ class FlaxGenerationMixin:
                 true_fn,
                 false_fn
             )
-            
-            jax.debug.print("model_outputs: {}", model_outputs)
-            jax.debug.print("state_logits: {}, shape: {}", state_logits, state_logits.shape)
-            jax.debug.print("cur_len: {}", state.cur_len)
-            
-            
+
             # apply min_length, ...
             logits = logits_processor(state.sequences, logits, state.cur_len)
 
