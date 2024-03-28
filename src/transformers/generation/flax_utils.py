@@ -622,9 +622,9 @@ class FlaxGenerationMixin:
             """state update fn."""
             model_outputs = model(state.running_token, params=params, **state.model_kwargs)
             
-            if state_logits.dtype != model_outputs.logits.dtype:
+            if state.logits.dtype != model_outputs.logits.dtype:
                 print("Casting model_outputs.logits to state_logits dtype")
-                state_logits = state_logits.astype(model_outputs.logits.dtype)
+                state.logits = state.logits.astype(model_outputs.logits.dtype)
             
             state_logits = lax.dynamic_update_slice(state.logits, model_outputs.logits, (0, 0, 0)) 
             
