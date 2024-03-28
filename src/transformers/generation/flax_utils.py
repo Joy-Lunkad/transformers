@@ -630,14 +630,14 @@ class FlaxGenerationMixin:
                 jax.debug.print("Casting state_logits to model_outputs.logits.dtype")
                 state_logits = state_logits.astype(model_outputs.logits.dtype)
             
-            def true_fn():
+            def true_fn() -> jnp.ndarray:
                 return lax.dynamic_update_slice(
                     state_logits, model_outputs.logits, (0, 0, 0)
                 )
             
-            def false_fn():
+            def false_fn() -> jnp.ndarray:
                 return lax.dynamic_update_slice(
-                    state_logits, logits, (0, state.cur_len, 0)
+                    state_logits, jnp.expand_dims(logits, axis=1), (0, state.cur_len, 0)
                 )
             
             state_logits = jax.lax.cond(
