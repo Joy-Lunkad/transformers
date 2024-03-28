@@ -275,6 +275,8 @@ class FlaxGenerationMixin:
         **kwargs,
     ):
         r"""
+        ----- FORCE BEAM SEARCH WITH 1 BEAM, hack to get "scores" as output ----
+        
         Generates sequences of token ids for models with a language modeling head.
 
         Parameters:
@@ -416,32 +418,32 @@ class FlaxGenerationMixin:
             logits_processor=logits_processor,
         )
 
-        if not generation_config.do_sample and generation_config.num_beams == 1:
-            return self._greedy_search(
-                input_ids,
-                generation_config.max_length,
-                generation_config.pad_token_id,
-                generation_config.eos_token_id,
-                logits_processor=logits_processor,
-                trace=trace,
-                params=params,
-                model_kwargs=model_kwargs,
-            )
-        elif generation_config.do_sample and generation_config.num_beams == 1:
-            logits_warper = self._get_logits_warper(generation_config=generation_config)
-            return self._sample(
-                input_ids,
-                generation_config.max_length,
-                generation_config.pad_token_id,
-                generation_config.eos_token_id,
-                prng_key,
-                logits_warper=logits_warper,
-                logits_processor=logits_processor,
-                trace=trace,
-                params=params,
-                model_kwargs=model_kwargs,
-            )
-        elif not generation_config.do_sample and generation_config.num_beams > 1:
+        # if not generation_config.do_sample and generation_config.num_beams == 1:
+        #     return self._greedy_search(
+        #         input_ids,
+        #         generation_config.max_length,
+        #         generation_config.pad_token_id,
+        #         generation_config.eos_token_id,
+        #         logits_processor=logits_processor,
+        #         trace=trace,
+        #         params=params,
+        #         model_kwargs=model_kwargs,
+        #     )
+        # elif generation_config.do_sample and generation_config.num_beams == 1:
+        #     logits_warper = self._get_logits_warper(generation_config=generation_config)
+        #     return self._sample(
+        #         input_ids,
+        #         generation_config.max_length,
+        #         generation_config.pad_token_id,
+        #         generation_config.eos_token_id,
+        #         prng_key,
+        #         logits_warper=logits_warper,
+        #         logits_processor=logits_processor,
+        #         trace=trace,
+        #         params=params,
+        #         model_kwargs=model_kwargs,
+        #     )
+        if not generation_config.do_sample and generation_config.num_beams == 1: # Greedy search Condition
             # broadcast input_ids & encoder_outputs
             input_ids = self._expand_to_num_beams(input_ids, num_beams=generation_config.num_beams)
 
