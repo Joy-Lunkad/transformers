@@ -626,8 +626,8 @@ class FlaxGenerationMixin:
             if state_logits.dtype != model_outputs.logits.dtype:
                 print("Casting state_logits to model_outputs.logits.dtype")
                 state_logits = state_logits.astype(model_outputs.logits.dtype)
-            
-            jax.debug.print("model_outputs", model_outputs)
+                
+            jax.debug.print("model_outputs: {}", model_outputs)
             
             state_logits = lax.dynamic_update_slice(state_logits, model_outputs.logits, (0, 0, 0)) 
             
