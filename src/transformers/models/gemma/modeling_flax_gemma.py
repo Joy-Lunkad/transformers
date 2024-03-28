@@ -537,9 +537,6 @@ class FlaxGemmaPreTrainedModel(FlaxPreTrainedModel):
             mutable=mutable,
         )
 
-        jax.debug.print(
-            "FlaxGemmaPreTrainedModel.__call__ : self.module.apply - {}", outputs
-        )
 
         # add updated cache to model output
         if past_key_values is not None and return_dict:
@@ -718,20 +715,12 @@ class FlaxGemmaForCausalLMModule(nn.Module):
             return_dict=return_dict,
         )
         
-        jax.debug.print(
-            "FlaxGemmaForCausalLMModule.__call__ : self.model.apply - {}", outputs
-        )
-        
         hidden_states = outputs[0]
         if self.config.tie_word_embeddings:
             shared_kernel = self.model.variables["params"]["embed_tokens"]["embedding"].T
             lm_logits = self.lm_head.apply({"params": {"kernel": shared_kernel}}, hidden_states)
         else:
             lm_logits = self.lm_head(hidden_states)
-        
-        jax.debug.print(
-            "FlaxGemmaForCausalLMModule.__call__ : lm_logits - {}", lm_logits
-        )
         
         if not return_dict:
             return (lm_logits,) + outputs[1:]
