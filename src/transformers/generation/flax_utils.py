@@ -584,7 +584,7 @@ class FlaxGenerationMixin:
         eos_token_id = jnp.array(eos_token_id, dtype=jnp.int32 if eos_token_id is not None else None)
         pad_token_id = jnp.array(pad_token_id, dtype=jnp.int32)
         cur_len = jnp.array(cur_len)
-        logits_collected_len = jnp.array(0)
+        org_len = jnp.array(cur_len)
 
         # per batch-item holding current token in loop.
         sequences = jnp.full((batch_size, max_length), pad_token_id, dtype=jnp.int32)
@@ -640,7 +640,7 @@ class FlaxGenerationMixin:
                 )
             
             state_logits = jax.lax.cond(
-                state.cur_len == 0,
+                state.cur_len == org_len,
                 true_fn,
                 false_fn
             )
