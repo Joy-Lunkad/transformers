@@ -378,6 +378,9 @@ class GenerationConfig(PushToHubMixin):
         self._commit_hash = kwargs.pop("_commit_hash", None)
         self.transformers_version = kwargs.pop("transformers_version", __version__)
 
+        # Additional attributes for Flax Greedy Decoding with output_logits - Setting default for gemma tokenizer
+        self.vocab_size = kwargs.pop("vocab_size", 256000)
+
         # Additional attributes without default values
         if not self._from_model_config:
             # we don't want to copy values from the model config if we're initializing a `GenerationConfig` from a
