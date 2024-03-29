@@ -620,7 +620,7 @@ class FlaxGenerationMixin:
             finish_generation = jnp.logical_or(has_reached_max_length, all_sequence_finished)
             return ~finish_generation
 
-        def greedy_search_body_fn(state: GreedyState, dummy_for_scan: None = None):
+        def greedy_search_body_fn(state: GreedyState):
             """state update fn."""
             model_outputs = model(state.running_token, params=params, **state.model_kwargs)
             logits = model_outputs.logits[:, -1]
@@ -664,19 +664,19 @@ class FlaxGenerationMixin:
                 running_token=next_token,
                 is_sent_finished=next_is_sent_finished,
                 model_kwargs=next_model_kwargs,
-            ), None
+            )
 
         # The very first prompt often has sequence length > 1, so run outside of `lax.while_loop` to comply with TPU
         if input_ids.shape[1] > 1:
-            state, _ = greedy_search_body_fn(state)
+            state = greedy_search_body_fn(state)
 
         if not trace:
-            state, _ = self._run_loop_in_debug(greedy_search_cond_fn, greedy_search_body_fn, state)
+            state = self._run_loop_in_debug(greedy_search_cond_fn, greedy_search_body_fn, state)
         else:
             # state = lax.while_loop(greedy_search_cond_fn, greedy_search_body_fn, state)
             # Run for a fixed number of steps always, max_length
-            loop_length = max_length - input_ids.shape[-1]
-            state, _ = lax.scan(greedy_search_body_fn, state, xs=None, length=loop_length)
+            # loop_length = max_length - input_ids.shape[-1]
+            # state, _ = lax.scan(greedy_search_body_fn, state, xs=None, length=loop_length)
 
         return FlaxGreedySearchOutput(sequences=state.sequences, logits=state.logits)
 
