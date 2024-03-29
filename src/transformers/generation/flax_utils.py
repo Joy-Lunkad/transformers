@@ -675,7 +675,7 @@ class FlaxGenerationMixin:
         else:
             # state = lax.while_loop(greedy_search_cond_fn, greedy_search_body_fn, state)
             # Run for a fixed number of steps always, max_length
-            loop_length = max_length - cur_len
+            loop_length = max_length - input_ids.shape[-1]
             state = lax.scan(greedy_search_body_fn, state, xs=None, length=loop_length)
 
         return FlaxGreedySearchOutput(sequences=state.sequences, logits=state.logits)
