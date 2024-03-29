@@ -620,7 +620,7 @@ class FlaxGenerationMixin:
             finish_generation = jnp.logical_or(has_reached_max_length, all_sequence_finished)
             return ~finish_generation
 
-        def greedy_search_body_fn(state: GreedyState):
+        def greedy_search_body_fn(state: GreedyState, dummy_for_scan: None = None):
             """state update fn."""
             model_outputs = model(state.running_token, params=params, **state.model_kwargs)
             logits = model_outputs.logits[:, -1]
