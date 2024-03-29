@@ -111,6 +111,7 @@ class GreedyState:
 class SampleState:
     cur_len: jnp.ndarray
     sequences: jnp.ndarray
+    logits: jnp.ndarray
     running_token: jnp.ndarray
     is_sent_finished: jnp.ndarray
     prng_key: jnp.ndarray
@@ -121,8 +122,10 @@ class SampleState:
 class BeamSearchState:
     cur_len: jnp.ndarray
     running_sequences: jnp.ndarray
+    running_logits: jnp.ndarray
     running_scores: jnp.ndarray
     sequences: jnp.ndarray
+    logits: jnp.ndarray
     scores: jnp.ndarray
     is_sent_finished: jnp.ndarray
     model_kwargs: Dict[str, jnp.ndarray]
@@ -576,8 +579,6 @@ class FlaxGenerationMixin:
         max_length = max_length if max_length is not None else self.generation_config.max_length
         pad_token_id = pad_token_id if pad_token_id is not None else self.generation_config.pad_token_id
         eos_token_id = eos_token_id if eos_token_id is not None else self.generation_config.eos_token_id
-        # vocab_size = self.config.get("vocab_size", self.generation_config.vocab_size)
-        vocab_size = self.config.vocab_size
         
         batch_size, cur_len = input_ids.shape
 
@@ -591,7 +592,7 @@ class FlaxGenerationMixin:
         sequences = lax.dynamic_update_slice(sequences, input_ids, (0, 0))
         
         # per batch-item holding current logits in loop.
-        logits = jnp.zeros((batch_size, max_length, vocab_size), dtype=jnp.float32)
+        logits = jnp.zeros((batch_size, max_length, self.config.vocab_size), dtype=jnp.float32)
 
         # per batch-item state bit indicating if sentence has finished.
         is_sent_finished = jnp.zeros((batch_size,), dtype=jnp.bool_)
@@ -623,7 +624,6 @@ class FlaxGenerationMixin:
             """state update fn."""
             model_outputs = model(state.running_token, params=params, **state.model_kwargs)
             logits = model_outputs.logits[:, -1]
-            
             
             state_logits = state.logits
             if state_logits.dtype != model_outputs.logits.dtype:
@@ -701,6 +701,9 @@ class FlaxGenerationMixin:
         eos_token_id = jnp.array(eos_token_id, dtype=jnp.int32 if eos_token_id is not None else None)
         pad_token_id = jnp.array(pad_token_id, dtype=jnp.int32)
         cur_len = jnp.array(cur_len)
+        org_len = jnp.array(cur_len)
+
+        logits = jnp.zeros((batch_size, max_length, self.config.vocab_size), dtype=jnp.float32)
 
         # per batch-item holding current token in loop.
         sequences = jnp.full((batch_size, max_length), pad_token_id, dtype=jnp.int32)
@@ -720,6 +723,7 @@ class FlaxGenerationMixin:
         state = SampleState(
             cur_len=cur_len,
             sequences=sequences,
+            logits=logits,
             running_token=input_ids,
             is_sent_finished=is_sent_finished,
             prng_key=prng_key,
@@ -739,7 +743,27 @@ class FlaxGenerationMixin:
             model_outputs = model(state.running_token, params=params, **state.model_kwargs)
 
             logits = model_outputs.logits[:, -1]
-
+            
+            state_logits = state.logits
+            if state_logits.dtype != model_outputs.logits.dtype:
+                state_logits = state_logits.astype(model_outputs.logits.dtype)
+            
+            def true_fn() -> jnp.ndarray:
+                return lax.dynamic_update_slice(
+                    state_logits, model_outputs.logits, (0, 0, 0)
+                )
+            
+            def false_fn() -> jnp.ndarray:
+                return lax.dynamic_update_slice(
+                    state_logits, jnp.expand_dims(logits, axis=1), (0, state.cur_len, 0)
+                )
+            
+            state_logits = jax.lax.cond(
+                state.cur_len == org_len,
+                true_fn,
+                false_fn
+            )
+            
             # apply min_length, ...
             logits = logits_processor(state.sequences, logits, state.cur_len)
             # apply top_p, top_k, temperature
@@ -757,6 +781,7 @@ class FlaxGenerationMixin:
             return SampleState(
                 cur_len=state.cur_len + 1,
                 sequences=next_sequences,
+                logits=state_logits,
                 running_token=next_token,
                 is_sent_finished=next_is_sent_finished,
                 model_kwargs=next_model_kwargs,
@@ -792,6 +817,8 @@ class FlaxGenerationMixin:
         This beam search function is heavily inspired by Flax's official example:
         https://github.com/google/flax/blob/main/examples/wmt/decode.py
         """
+
+        # TODO: unfinished
 
         def flatten_beam_dim(tensor):
             """Flattens the first two dimensions of a non-scalar array."""
@@ -839,6 +866,7 @@ class FlaxGenerationMixin:
         eos_token_id = jnp.array(eos_token_id, dtype=jnp.int32 if eos_token_id is not None else None)
         pad_token_id = jnp.array(pad_token_id, dtype=jnp.int32)
         cur_len = jnp.array(cur_len)
+        org_len = jnp.array(cur_len)
 
         # record the prompt length of decoder
         decoder_prompt_len = input_ids.shape[-1]
@@ -848,6 +876,9 @@ class FlaxGenerationMixin:
         running_sequences = jnp.full((batch_size, num_beams, max_length), pad_token_id, dtype=jnp.int32)
         running_sequences = lax.dynamic_update_slice(sequences, input_ids, (0, 0, 0))
 
+        logits = jnp.zeros((batch_size, num_beams, max_length, self.config.vocab_size), dtype=jnp.float32)
+        running_logits = jnp.zeros((batch_size, num_beams, max_length, self.config.vocab_size), dtype=jnp.float32)
+        
         # per batch,beam-item state bit indicating if sentence has finished.
         is_sent_finished = jnp.zeros((batch_size, num_beams), dtype=jnp.bool_)
 
@@ -875,8 +906,10 @@ class FlaxGenerationMixin:
         state = BeamSearchState(
             cur_len=cur_len,
             running_sequences=running_sequences,
+            running_logits=running_logits,
             running_scores=running_scores,
             sequences=sequences,
+            logits=logits,
             scores=scores,
             is_sent_finished=is_sent_finished,
             model_kwargs=model_kwargs,
@@ -929,6 +962,10 @@ class FlaxGenerationMixin:
             )
             model_outputs = model(input_token, params=params, **state.model_kwargs)
 
+            state_logits = state.logits
+            if state_logits.dtype != model_outputs.logits.dtype:
+                state_logits = state_logits.astype(model_outputs.logits.dtype)
+            
             logits = unflatten_beam_dim(model_outputs.logits[:, -1], batch_size, num_beams)
             cache = jax.tree_util.tree_map(
                 lambda tensor: unflatten_beam_dim(tensor, batch_size, num_beams), model_outputs.past_key_values
@@ -967,8 +1004,12 @@ class FlaxGenerationMixin:
             topk_running_sequences = gather_beams(
                 state.running_sequences, topk_beam_indices, batch_size, beams_to_keep
             )
+            topk_running_logits = gather_beams(
+                state.running_logits, topk_beam_indices, batch_size, beams_to_keep
+                )
             topk_ids = jnp.expand_dims(topk_indices % vocab_size, axis=2)
             topk_sequences = lax.dynamic_update_slice(topk_running_sequences, topk_ids, (0, 0, state.cur_len))
+            topk_logits = lax.dynamic_update_slice(topk_running_logits, topk_log_probs, (0, 0, state.cur_len, 0))
 
             # 4. Check which sequences have ended
             # Update current sequences:
