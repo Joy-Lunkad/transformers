@@ -664,14 +664,14 @@ class FlaxGenerationMixin:
                 running_token=next_token,
                 is_sent_finished=next_is_sent_finished,
                 model_kwargs=next_model_kwargs,
-            )
+            ), None
 
         # The very first prompt often has sequence length > 1, so run outside of `lax.while_loop` to comply with TPU
         if input_ids.shape[1] > 1:
-            state = greedy_search_body_fn(state)
+            state, _ = greedy_search_body_fn(state)
 
         if not trace:
-            state = self._run_loop_in_debug(greedy_search_cond_fn, greedy_search_body_fn, state)
+            state, _ = self._run_loop_in_debug(greedy_search_cond_fn, greedy_search_body_fn, state)
         else:
             # state = lax.while_loop(greedy_search_cond_fn, greedy_search_body_fn, state)
             # Run for a fixed number of steps always, max_length
