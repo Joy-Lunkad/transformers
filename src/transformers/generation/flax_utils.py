@@ -612,7 +612,7 @@ class FlaxGenerationMixin:
             is_sent_finished=is_sent_finished,
             model_kwargs=model_kwargs,
         )
-
++
         def greedy_search_cond_fn(state):
             """state termination condition fn."""
             has_reached_max_length = state.cur_len == max_length
@@ -630,9 +630,10 @@ class FlaxGenerationMixin:
                 state_logits = state_logits.astype(model_outputs.logits.dtype)
             
             def true_fn() -> jnp.ndarray:
-                return lax.dynamic_update_slice(
-                    state_logits, model_outputs.logits, (0, 0, 0)
-                )
+                return state_logits
+                # return lax.dynamic_update_slice(
+                #     state_logits, model_outputs.logits, (0, 0, 0)
+                # )
             
             def false_fn() -> jnp.ndarray:
                 return lax.dynamic_update_slice(
