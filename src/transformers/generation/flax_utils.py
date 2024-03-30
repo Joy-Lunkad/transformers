@@ -633,7 +633,7 @@ class FlaxGenerationMixin:
             state_logits = lax.dynamic_update_slice(
                     state_logits, model_outputs.logits, (0, state.cur_logit, 0)
                 )
-            num_logits = model_outputs.shape[1]
+            num_logits = model_outputs.logits.shape[1]
 
             # apply min_length, ...
             logits = logits_processor(state.sequences, logits, state.cur_len)
