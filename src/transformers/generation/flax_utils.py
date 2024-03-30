@@ -613,7 +613,7 @@ class FlaxGenerationMixin:
             is_sent_finished=is_sent_finished,
             model_kwargs=model_kwargs,
         )
-+
+
         def greedy_search_cond_fn(state):
             """state termination condition fn."""
             has_reached_max_length = state.cur_len == max_length
