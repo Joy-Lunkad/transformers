@@ -633,6 +633,8 @@ class FlaxGenerationMixin:
                     state_logits, model_outputs.logits, (0, 0, 0)
                 )
             
+            jax.debug.print("model_outputs.logits.shape", model_outputs.logits.shape)
+            
             # def true_fn() -> jnp.ndarray:
             #     return lax.dynamic_update_slice(
             #         state_logits, model_outputs.logits, (0, 0, 0)
