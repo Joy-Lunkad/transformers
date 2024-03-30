@@ -102,6 +102,7 @@ class GreedyState:
     cur_len: jnp.ndarray
     sequences: jnp.ndarray
     logits: jnp.ndarray
+    cur_logit: jnp.ndarray
     running_token: jnp.ndarray
     is_sent_finished: jnp.ndarray
     model_kwargs: Dict[str, jnp.ndarray]
@@ -585,7 +586,6 @@ class FlaxGenerationMixin:
         eos_token_id = jnp.array(eos_token_id, dtype=jnp.int32 if eos_token_id is not None else None)
         pad_token_id = jnp.array(pad_token_id, dtype=jnp.int32)
         cur_len = jnp.array(cur_len)
-        org_len = jnp.array(cur_len)
 
         # per batch-item holding current token in loop.
         sequences = jnp.full((batch_size, max_length), pad_token_id, dtype=jnp.int32)
@@ -608,6 +608,7 @@ class FlaxGenerationMixin:
             cur_len=cur_len,
             sequences=sequences,
             logits=logits,
+            cur_logit=0,
             running_token=input_ids,
             is_sent_finished=is_sent_finished,
             model_kwargs=model_kwargs,
@@ -630,27 +631,9 @@ class FlaxGenerationMixin:
                 state_logits = state_logits.astype(model_outputs.logits.dtype)
             
             state_logits = lax.dynamic_update_slice(
-                    state_logits, model_outputs.logits, (0, 0, 0)
+                    state_logits, model_outputs.logits, (0, state.cur_logit, 0)
                 )
-            
-            jax.debug.print("model_outputs.logits.shape: {}", model_outputs.logits.shape)
-            jax.debug.print("cur_len: {}", cur_len)
-            
-            # def true_fn() -> jnp.ndarray:
-            #     return lax.dynamic_update_slice(
-            #         state_logits, model_outputs.logits, (0, 0, 0)
-            #     )
-            
-            # def false_fn() -> jnp.ndarray:
-            #     return lax.dynamic_update_slice(
-            #         state_logits, jnp.expand_dims(logits, axis=1), (0, state.cur_len, 0)
-            #     )
-            
-            # state_logits = jax.lax.cond(
-            #     state.cur_len == org_len,
-            #     true_fn,
-            #     false_fn
-            # )
+            num_logits = model_outputs.shape[1]
 
             # apply min_length, ...
             logits = logits_processor(state.sequences, logits, state.cur_len)
@@ -669,6 +652,7 @@ class FlaxGenerationMixin:
                 cur_len=state.cur_len + 1,
                 sequences=next_sequences,
                 logits=state_logits,
+                cur_logit=state.cur_logit + num_logits, 
                 running_token=next_token,
                 is_sent_finished=next_is_sent_finished,
                 model_kwargs=next_model_kwargs,
