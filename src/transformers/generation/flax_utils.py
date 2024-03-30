@@ -634,6 +634,7 @@ class FlaxGenerationMixin:
                 )
             
             jax.debug.print("model_outputs.logits.shape: {}", model_outputs.logits.shape)
+            jax.debug.print("cur_len: {}", cur_len)
             
             # def true_fn() -> jnp.ndarray:
             #     return lax.dynamic_update_slice(
