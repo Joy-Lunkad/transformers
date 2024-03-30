@@ -592,7 +592,8 @@ class FlaxGenerationMixin:
         sequences = lax.dynamic_update_slice(sequences, input_ids, (0, 0))
         
         # per batch-item holding current logits in loop.
-        logits = jnp.zeros((batch_size, max_length, self.config.vocab_size), dtype=jnp.float32)
+        # logits = jnp.zeros((batch_size, max_length, self.config.vocab_size), dtype=jnp.float32)
+        logits = jnp.ones((batch_size, max_length, self.config.vocab_size), dtype=jnp.float32)
 
         # per batch-item state bit indicating if sentence has finished.
         is_sent_finished = jnp.zeros((batch_size,), dtype=jnp.bool_)
@@ -630,10 +631,9 @@ class FlaxGenerationMixin:
                 state_logits = state_logits.astype(model_outputs.logits.dtype)
             
             def true_fn() -> jnp.ndarray:
-                return state_logits
-                # return lax.dynamic_update_slice(
-                #     state_logits, model_outputs.logits, (0, 0, 0)
-                # )
+                return lax.dynamic_update_slice(
+                    state_logits, model_outputs.logits, (0, 0, 0)
+                )
             
             def false_fn() -> jnp.ndarray:
                 return lax.dynamic_update_slice(
