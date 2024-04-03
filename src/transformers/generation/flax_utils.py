@@ -78,6 +78,7 @@ class FlaxSampleOutput(ModelOutput):
     """
 
     sequences: jnp.ndarray = None
+    logits: jnp.ndarray = None
 
 
 @flax.struct.dataclass
